@@ -3,3 +3,5 @@ pydantic-settings
 aiogram
 asyncio
 python-dotenv
+standard-imghdr
+requests
