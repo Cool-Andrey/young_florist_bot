@@ -13,11 +13,6 @@ class MyBot:
         self.dp.message.register(self.gitler, F.text == "pivo")
 
 
-    async def bot_commands_setup(self):
-        bot_command = [BotCommand(command="/help", description="Get info about me"),
-                       BotCommand(command="/start", description="Started bot")]
-        await Bot.set_my_commands(bot_command)
-
     async def start(self, message: Message):
         await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main)
 
