@@ -1,6 +1,6 @@
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message
+from aiogram.types import Message, BotCommand
 
 import src.bot.keyboards as kb
 
@@ -11,6 +11,12 @@ class MyBot:
         self.dp.message.register(self.start, CommandStart())
         self.dp.message.register(self.help, F.text == ('помощь'))
         self.dp.message.register(self.gitler, F.text == "pivo")
+
+
+    async def bot_commands_setup(self):
+        bot_command = [BotCommand(command="/help", description="Get info about me"),
+                       BotCommand(command="/start", description="Started bot")]
+        await Bot.set_my_commands(bot_command)
 
     async def start(self, message: Message):
         await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main)
