@@ -2,17 +2,18 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 
+import src.bot.keyboards as kb
 
 class MyBot:
     def __init__(self, token: str):
         self.bot = Bot(token=token)
         self.dp = Dispatcher()
         self.dp.message.register(self.start, CommandStart())
-        self.dp.message.register(self.help, Command('help'))
+        self.dp.message.register(self.help, F.text == ('помощь'))
         self.dp.message.register(self.gitler, F.text == "pivo")
 
     async def start(self, message: Message):
-        await message.answer("Привет! Этот бот тебя шлёт к хуям!")
+        await message.answer("Привет! Этот бот тебя шлёт к хуям!", reply_markup=kb.main)
 
     async def help(self, message: Message):
         await message.answer("Помощи нет")

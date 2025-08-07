@@ -10,4 +10,7 @@ async def main():
     await tg.run()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print('Бот выключен')
