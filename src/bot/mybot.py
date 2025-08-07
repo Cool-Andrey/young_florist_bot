@@ -13,10 +13,16 @@ class MyBot:
         self.dp.message.register(self.gitler, F.text == "pivo")
 
     async def start(self, message: Message):
-        await message.answer("Привет! Этот бот тебя шлёт к хуям!", reply_markup=kb.main)
+        await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main)
 
     async def help(self, message: Message):
-        await message.answer("Помощи нет")
+        await message.answer(f'''📸 Как отправить фото:
+
+1) Нажми на «📎 Скрепка» (вложения)
+
+2)Выбери «Галерея» или «Камера»
+
+3) Загрузи фото растения – и я его проанализирую!''')
 
     async def gitler(self, message: Message):
         await message.answer('''Was wollen wir trinken,
