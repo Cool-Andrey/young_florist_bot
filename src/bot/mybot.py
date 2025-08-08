@@ -5,13 +5,10 @@ from aiogram import Bot, Dispatcher, F
 
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, BotCommand, CallbackQuery
-
-from src.config.config import Config
-
-import src.config.config
+from aiogram.fsm.context import FSMContext
 
 import src.bot.keyboards as kb
-from src.ai.request_to_api import handle_photo
+from src.ai.request_to_plant import handle_photo, get_details
 from src.config.config import Config
 
 
@@ -81,8 +78,8 @@ ja, wir wollen's!''')
     async def menu_translate(self, message: Message):
         await message.answer('Выберете язык', reply_markup=kb.translate_menu)
 
-    async def translate_ru(self, callback: CallbackQuery):
-        await callback.message.answer('qw')
+    async def translate_ru(self, callback: CallbackQuery, state : FSMContext):
+        await state.update_data(lang='ru')
 
     async def geolocation(self, message: Message):
         await message.answer('''СИСТЕМА ПОИСКА ПИДОРАСОВ АКТИВИРОВАНА
@@ -90,11 +87,11 @@ ja, wir wollen's!''')
         ПИ-ПИ-ПИ-ПИ
         ПИДОРАС НАЙДЕН''')
 
-    async def more_details(self, message: Message):
-        await message.answer('Расскажи мне всё!')
-
+    async def more_details(self, message: Message, state : FSMContext):
+        data = await state.get_data()
+        get_details(data['id'], self.ai_token)
     async def similar_images(self, message: Message):
-        await message.answer('Похожие изибражения')
+        await message.answer('Похожие изображения')
 
     async def heat_maps_symptom_assessment(self, message: Message):
         await message.answer('тепловые карты и оценка тяжости симтомов')
@@ -102,7 +99,7 @@ ja, wir wollen's!''')
     async def run(self):
         await self.dp.start_polling(self.bot)
 
-    async def handle_photo(self, message: Message):
+    async def handle_photo(self, message: Message, state : FSMContext):
         print("Начата обработка изображения")
         await message.reply("Обрабатываю изображение...")
         photo_id = message.photo[-1].file_id
@@ -118,4 +115,6 @@ ja, wir wollen's!''')
                 "Не удалось определить тип изображения. Возможно ваш файл поврежден. Отправьте его повторно или попробуйте другое изображение.")
             return
         files = {'image': (f'image_from_user.{photo_type}', io.BytesIO(photo_bytes), mime_type)}
-        await message.reply(handle_photo(files, self.ai_token))
+        res, id = handle_photo(files, self.ai_token)
+        await message.reply(res)
+        await state.update_data(id=id)

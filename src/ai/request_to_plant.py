@@ -1,0 +1,52 @@
+import requests
+from src.utils.find_name_flower import get_russian_name_from_latin
+
+def handle_photo(files, ai_token : str) -> (str, str | None):
+    try:
+        id = ""
+        headers = {'api-key': ai_token}
+        response = requests.post("https://api.plant.id/v3/identification", files=files, headers=headers)
+        response.raise_for_status()
+        response_json = response.json()
+        print(response_json)
+        if 'result' in response_json and 'classification' in response_json['result'] and 'suggestions' in response_json['result']['classification']:
+            suggestions = response_json['result']['classification']['suggestions']
+            if suggestions:
+                top_suggestion = suggestions[0]
+                plant_name = top_suggestion.get('name', '')
+                probability = top_suggestion.get('probability', '')
+                id = top_suggestion['id']
+                try:
+                    probability = round(float(probability * 100))
+                    if probability < 5:
+                        plant_name = ""
+                except ValueError:
+                    probability = ""
+                if probability:
+                    response_text = f"вероятнее всего это: {get_russian_name_from_latin(plant_name, "ru")}\tнаучное название: {plant_name}\n(вероятность: {probability}%)"
+                else: response_text = "не удалось определить растение."
+            else:
+                response_text = "не удалось определить растение."
+        else:
+            response_text = "не удалось получить информацию о растении."
+        return response_text, id
+    except requests.exceptions.RequestException as e:
+        print(e)
+        return f"ошибка запроса к нейронке:\n{e}"
+    except Exception as e:
+        print(e)
+        return f"неожиданная ошибка:\n{e}"
+
+def get_details(id : str, ai_token : str) -> str:
+    try:
+        headers = {'api-key': ai_token}
+        response = requests.get(f"https://api.plant.id/v3/plant_details/{id}", headers)
+        response.raise_for_status()
+        response_json = response.json()
+        print(response_json)
+    except requests.exceptions.RequestException as e:
+        print(e)
+        return f"ошибка запроса к нейронке:\n{e}"
+    except Exception as e:
+        print(e)
+        return f"неожиданная ошибка:\n{e}"
