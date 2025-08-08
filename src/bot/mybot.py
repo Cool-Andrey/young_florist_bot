@@ -2,11 +2,9 @@ import io
 
 import imghdr
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
-from aiogram.types import Message
+
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, BotCommand
-from aiohttp import request
+from aiogram.types import Message, BotCommand, CallbackQuery
 
 from src.config.config import Config
 
@@ -23,6 +21,7 @@ class MyBot:
         self.bot = Bot(token=config.bot_token)
         self.dp = Dispatcher()
         self.dp.message.register(self.start, CommandStart())
+        self.dp.callback_query.register(self.translate_ru, F.data == 'ru')
         self.dp.message.register(self.menu_translate, F.text == 'перевод')
         self.dp.message.register(self.help, F.text == 'помощь')
         self.dp.message.register(self.gitler, F.text == "pivo")
@@ -81,6 +80,9 @@ ja, wir wollen's!''')
 
     async def menu_translate(self, message: Message):
         await message.answer('Выберете язык', reply_markup=kb.translate_menu)
+
+    async def translate_ru(self, callback: CallbackQuery):
+        await callback.message.answer('qw')
 
     async def geolocation(self, message: Message):
         await message.answer('''СИСТЕМА ПОИСКА ПИДОРАСОВ АКТИВИРОВАНА
