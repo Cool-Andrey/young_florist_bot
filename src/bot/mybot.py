@@ -5,7 +5,7 @@ import requests
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, BotCommand
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQwery
 from aiohttp import request
 
 from src.config.config import Config
@@ -21,8 +21,14 @@ class MyBot:
         self.bot = Bot(token=config.bot_token)
         self.dp = Dispatcher()
         self.dp.message.register(self.start, CommandStart())
-        self.dp.message.register(self.help, F.text == ('помощь'))
+        self.dp.message.register(self.perevod, F.text == 'перевод')
+        self.dp.message.register(self.help, F.text == 'помощь')
         self.dp.message.register(self.gitler, F.text == "pivo")
+        self.dp.message.register(self.geolocation, F.text == 'местоположение')
+        self.dp.message.register(self.more_details, F.text == 'подробнее')
+        self.dp.message.register(self.similar_images, F.text == "похожие изображения")
+        self.dp.message.register(self.heat_maps_symptom_assessment, F.text == "тепловые карты и оценка тяжости симтомов")
+        self.dp.
         self.dp.message.register(self.handle_photo)
 
 
@@ -72,6 +78,24 @@ Wir wollen lieben,
 sieben Tage lang!
 Wir wollen lieben,
 ja, wir wollen's!''')
+
+    async def perevod(self, message: Message):
+        await message.answer('Выберете язык', reply_markup=kb.perevod)
+
+    async def geolocation(self, message: Message):
+        await message.answer('''СИСТЕМА ПОИСКА ПИДОРАСОВ АКТИВИРОВАНА
+        ПИ
+        ПИ-ПИ-ПИ-ПИ
+        ПИДОРАС НАЙДЕН''')
+
+    async def more_details(self, message: Message):
+        await message.answer('Расскажи мне всё!')
+
+    async def similar_images(self, message: Message):
+        await message.answer('Похожие изибражения')
+
+    async def heat_maps_symptom_assessment(self, message: Message):
+        await message.answer('тепловые карты и оценка тяжости симтомов')
 
     async def run(self):
         await self.dp.start_polling(self.bot)
