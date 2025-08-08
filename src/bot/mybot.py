@@ -30,7 +30,7 @@ class MyBot:
         self.dp.message.register(self.similar_images, F.text == "похожие изображения")
         self.dp.message.register(self.heat_maps_symptom_assessment,
                                  F.text == "тепловые карты и оценка тяжости симтомов")
-        self.dp.message.register(self.handle_photo)
+        self.dp.message.register(self.handle_photo, F.photo)
 
     async def start(self, message: Message):
         await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main)

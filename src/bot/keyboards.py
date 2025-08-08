@@ -3,7 +3,8 @@ from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
 
 main = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="местоположение"), KeyboardButton(text="подробнее")],
                                      [KeyboardButton(text="похожие изображения"), KeyboardButton(text="тепловые карты и оценка тяжости симтомов")],
-                                     [KeyboardButton(text="помощь")], [KeyboardButton(text="перевод")]],
+                                     [KeyboardButton(text="помощь")],
+                                     [KeyboardButton(text="перевод")]],
                            resize_keyboard=True,
                            input_field_placeholder='Ваш цветок')
 
