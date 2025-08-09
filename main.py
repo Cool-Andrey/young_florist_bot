@@ -6,14 +6,14 @@ import src.bot.mybot as bot
 import src.repository.sqlite.sqlite as sqlite
 
 conf = config.Config()
-tg = bot.MyBot(conf)
+conn = sqlite.Repository(conf.db_path)
+myBot = bot.MyBot(conf, conn)
 
 async def main():
-    await tg.run()
+    await myBot.run()
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    conn = sqlite.Repository(conf.db_path)
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS users
 (
     id           INTEGER UNIQUE,
-    language     TEXT,
+    lang         TEXT,
     access_token TEXT
 );

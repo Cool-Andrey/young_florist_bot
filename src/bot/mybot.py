@@ -1,3 +1,4 @@
+import base64
 import io
 
 import imghdr
@@ -6,20 +7,22 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, BotCommand, CallbackQuery
 from aiogram.fsm.context import FSMContext
+from pyexpat.errors import messages
 
 import src.bot.keyboards as kb
 from src.ai.request_to_plant import handle_photo, get_details
 from src.config.config import Config
+from src.repository.sqlite.sqlite import Repository
 
 
 class MyBot:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, conn: Repository):
         self.ai_token = config.ai_token
         self.bot = Bot(token=config.bot_token)
+        self.conn = conn
         self.dp = Dispatcher()
         self.dp.message.register(self.start, CommandStart())
-        self.dp.callback_query.register(self.translate_ru, F.data == 'ru')
-        self.dp.message.register(self.menu_translate, F.text == 'перевод')
+        self.dp.message.register(self.menu_translate, F.text == 'язык')
         self.dp.message.register(self.help, F.text == 'помощь')
         self.dp.message.register(self.gitler, F.text == "pivo")
         self.dp.message.register(self.geolocation, F.text == 'местоположение')
@@ -28,9 +31,12 @@ class MyBot:
         self.dp.message.register(self.heat_maps_symptom_assessment,
                                  F.text == "тепловые карты и оценка тяжости симтомов")
         self.dp.message.register(self.handle_photo, F.photo)
+        self.dp.callback_query.register(self.translate_ru, F.data == 'ru')
+        self.dp.callback_query.register(self.translate_en, F.data == 'en')
 
     async def start(self, message: Message):
         await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main)
+        await self.conn.set_user(message.from_user.id)
 
     async def help(self, message: Message):
         await message.answer(f'''📸 Как отправить фото:
@@ -78,8 +84,11 @@ ja, wir wollen's!''')
     async def menu_translate(self, message: Message):
         await message.answer('Выберете язык', reply_markup=kb.translate_menu)
 
-    async def translate_ru(self, callback: CallbackQuery, state : FSMContext):
-        await state.update_data(lang='ru')
+    async def translate_ru(self, callback: CallbackQuery):
+        await self.conn.set_user(callback.from_user.id, 'ru')
+
+    async def translate_en(self, callback: CallbackQuery):
+        await self.conn.set_user( callback.from_user.id, 'en')
 
     async def geolocation(self, message: Message):
         await message.answer('''СИСТЕМА ПОИСКА ПИДОРАСОВ АКТИВИРОВАНА
@@ -87,16 +96,16 @@ ja, wir wollen's!''')
         ПИ-ПИ-ПИ-ПИ
         ПИДОРАС НАЙДЕН''')
 
-    async def more_details(self, message: Message, state : FSMContext):
-        data = await state.get_data()
+    async def more_details(self, message: Message):
         try:
-            print("Здесь")
-            unformatted_json = get_details(data['id'], self.ai_token)
-            await message.answer(f"```json\n{unformatted_json}\n```")
+            access_token = self.conn.get_token(message.from_user.id)
+            if access_token:
+                unformatted_json = get_details(access_token, self.ai_token)
+                await message.answer(f"```json\n{unformatted_json}\n```")
         except Exception as e:
-            print("Здесь #2")
             print(e)
             await message.answer(str(e))
+
     async def similar_images(self, message: Message):
         await message.answer('Похожие изображения')
 
@@ -106,7 +115,7 @@ ja, wir wollen's!''')
     async def run(self):
         await self.dp.start_polling(self.bot)
 
-    async def handle_photo(self, message: Message, state : FSMContext):
+    async def handle_photo(self, message: Message):
         print("Начата обработка изображения")
         await message.reply("Обрабатываю изображение...")
         photo_id = message.photo[-1].file_id
@@ -114,16 +123,17 @@ ja, wir wollen's!''')
         buffer = io.BytesIO()
         await self.bot.download_file(file.file_path, buffer)
         buffer.seek(0)
-        photo_bytes = buffer.read()
-        mime_type = "image/"
-        photo_type = imghdr.what(None, photo_bytes)
-        if not photo_type:
-            await message.reply(
-                "Не удалось определить тип изображения. Возможно ваш файл поврежден. Отправьте его повторно или попробуйте другое изображение.")
-            return
-        files = {'image': (f'image_from_user.{photo_type}', io.BytesIO(photo_bytes), mime_type)}
-        data = await state.get_data()
-        print(data)
-        res, access_token = handle_photo(files, data['lang'], self.ai_token)
+        photo_bytes = buffer.getvalue()
+        photo_base64 = base64.b64encode(photo_bytes).decode('utf-8')
+        # mime_type = "image/"
+        # photo_type = imghdr.what(None, photo_bytes)
+        # if not photo_type:
+        #     await message.reply(
+        #         "Не удалось определить тип изображения. Возможно ваш файл поврежден. Отправьте его повторно или попробуйте другое изображение.")
+        #     return
+        # files = {'image': (f'image_from_user.{photo_type}', io.BytesIO(photo_bytes), mime_type)}
+        user_id = message.from_user.id
+        language = await self.conn.get_language(user_id)
+        res, access_token = handle_photo(photo_base64, language, self.ai_token)
         await message.reply(res)
-        await state.update_data(access_token=access_token)
+        await self.conn.set_token(access_token, user_id)

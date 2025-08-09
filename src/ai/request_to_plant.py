@@ -3,31 +3,15 @@ import json
 import requests
 from src.utils.find_name_flower import get_russian_name_from_latin
 
-def handle_photo(files, language : str, ai_token : str) -> (str, str | None):
+def handle_photo(photo, language : str, ai_token : str) -> (str, str | None):
     try:
         plant_id = ""
         data = {
-            'details': [
-                'common_names',
-                'description',
-                'taxonomy',
-                'image',
-                'images',
-                'synonyms',
-                'edible_parts',
-                'propagation_methods',
-                'watering',
-                'best_watering',
-                'best_light_condition',
-                'best_soil_type',
-                'common_uses',
-                'toxicity',
-                'cultural_significance',
-            ],
-            'language': language
+            'images' : [photo],
         }
+        details = "common_names, description, taxonomy, synonyms, edible_parts, propagation_methods, watering, best_watering, best_light_condition, best_soil_type, common_uses, toxicity, cultural_significance"
         headers = {'api-key': ai_token}
-        response = requests.post("https://api.plant.id/v3/identification", files=files, headers=headers, data=data)
+        response = requests.post(f"https://api.plant.id/v3/identification?details={details}&language={language}", headers=headers, json=data)
         response.raise_for_status()
         response_json = response.json()
         print(response_json)
@@ -37,7 +21,6 @@ def handle_photo(files, language : str, ai_token : str) -> (str, str | None):
                 top_suggestion = suggestions[0]
                 plant_name = top_suggestion.get('name', '')
                 probability = top_suggestion.get('probability', '')
-                plant_id = top_suggestion['id']
                 try:
                     probability = round(float(probability * 100))
                     if probability < 5:
@@ -64,24 +47,22 @@ def handle_photo(files, language : str, ai_token : str) -> (str, str | None):
                 if toxicity:
                     lines.append(f"Токсичность: {toxicity}")
                 response_text = "\n".join(lines)
-                return response_text, plant_id
+                return response_text, response_json['access_token']
             else:
                 return "Не удалось определить растение.", None
         else:
             return "Не удалось получить информацию о растении.", None
     except requests.exceptions.RequestException as e:
         print(e)
-        return f"Ошибка запроса к нейронке:\n{e}"
+        return f"Ошибка запроса к нейронке:\n{e}", None
     except Exception as e:
         print(e)
-        return f"Неожиданная ошибка:\n{e}"
+        return f"Неожиданная ошибка:\n{e}", None
 
-def get_details(id : str, language : str,ai_token : str) -> str:
+def get_details(access_token : str, ai_token : str) -> str:
     try:
         headers = {'api-key': ai_token}
-        params = {'language' : language}
-        details = ("best_watering", "best_light_condition", "best_soil_type", "watering", "propagation_methods", "common_uses", "toxicity", "cultural_significance")
-        response = requests.get(f"https://api.plant.id/v3/plant/{id}", headers)
+        response = requests.get(f"https://api.plant.id/v3/identification/{access_token}", headers)
         response.raise_for_status()
         response_json = response.json()
         formatted_json = json.dumps(response_json, ensure_ascii=False, indent=2)
