@@ -123,6 +123,7 @@ ja, wir wollen's!''')
             return
         files = {'image': (f'image_from_user.{photo_type}', io.BytesIO(photo_bytes), mime_type)}
         data = await state.get_data()
+        print(data)
         res, access_token = handle_photo(files, data['lang'], self.ai_token)
         await message.reply(res)
         await state.update_data(access_token=access_token)
