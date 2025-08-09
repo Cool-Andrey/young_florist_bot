@@ -1,11 +1,33 @@
+import json
+
 import requests
 from src.utils.find_name_flower import get_russian_name_from_latin
 
-def handle_photo(files, ai_token : str) -> (str, str | None):
+def handle_photo(files, language : str, ai_token : str) -> (str, str | None):
     try:
-        id = ""
+        plant_id = ""
+        data = {
+            'details': [
+                'common_names',
+                'description',
+                'taxonomy',
+                'image',
+                'images',
+                'synonyms',
+                'edible_parts',
+                'propagation_methods',
+                'watering',
+                'best_watering',
+                'best_light_condition',
+                'best_soil_type',
+                'common_uses',
+                'toxicity',
+                'cultural_significance',
+            ],
+            'language': language
+        }
         headers = {'api-key': ai_token}
-        response = requests.post("https://api.plant.id/v3/identification", files=files, headers=headers)
+        response = requests.post("https://api.plant.id/v3/identification", files=files, headers=headers, data=data)
         response.raise_for_status()
         response_json = response.json()
         print(response_json)
@@ -15,38 +37,59 @@ def handle_photo(files, ai_token : str) -> (str, str | None):
                 top_suggestion = suggestions[0]
                 plant_name = top_suggestion.get('name', '')
                 probability = top_suggestion.get('probability', '')
-                id = top_suggestion['id']
+                plant_id = top_suggestion['id']
                 try:
                     probability = round(float(probability * 100))
                     if probability < 5:
-                        plant_name = ""
-                except ValueError:
-                    probability = ""
-                if probability:
-                    response_text = f"вероятнее всего это: {get_russian_name_from_latin(plant_name, "ru")}\tнаучное название: {plant_name}\n(вероятность: {probability}%)"
-                else: response_text = "не удалось определить растение."
+                        return "Не удалось определить растение.", None
+                except (ValueError, TypeError):
+                    return "Не удалось определить растение.", None
+                russian_name = get_russian_name_from_latin(plant_name, "ru")
+                details = top_suggestion.get('details', {})
+                description = details.get('description', '')
+                edible_parts = details.get('edible_parts', [])
+                toxicity = details.get('toxicity', '')
+                common_names = details.get('common_names', [])
+                lines = [
+                    f"Вероятнее всего это: {russian_name}",
+                    f"Научное название: {plant_name}"
+                ]
+                if common_names:
+                    lines.append(f"Другие названия: {', '.join(common_names)}")
+                lines.append(f"(Вероятность: {probability}%)")
+                if description:
+                    lines.append(f"\nОписание: {description}")
+                if edible_parts:
+                    lines.append(f"Съедобные части: {', '.join(edible_parts)}")
+                if toxicity:
+                    lines.append(f"Токсичность: {toxicity}")
+                response_text = "\n".join(lines)
+                return response_text, plant_id
             else:
-                response_text = "не удалось определить растение."
+                return "Не удалось определить растение.", None
         else:
-            response_text = "не удалось получить информацию о растении."
-        return response_text, id
+            return "Не удалось получить информацию о растении.", None
     except requests.exceptions.RequestException as e:
         print(e)
-        return f"ошибка запроса к нейронке:\n{e}"
+        return f"Ошибка запроса к нейронке:\n{e}"
     except Exception as e:
         print(e)
-        return f"неожиданная ошибка:\n{e}"
+        return f"Неожиданная ошибка:\n{e}"
 
-def get_details(id : str, ai_token : str) -> str:
+def get_details(id : str, language : str,ai_token : str) -> str:
     try:
         headers = {'api-key': ai_token}
-        response = requests.get(f"https://api.plant.id/v3/plant_details/{id}", headers)
+        params = {'language' : language}
+        details = ("best_watering", "best_light_condition", "best_soil_type", "watering", "propagation_methods", "common_uses", "toxicity", "cultural_significance")
+        response = requests.get(f"https://api.plant.id/v3/plant/{id}", headers)
         response.raise_for_status()
         response_json = response.json()
-        print(response_json)
+        formatted_json = json.dumps(response_json, ensure_ascii=False, indent=2)
+        print(formatted_json)
+        return formatted_json
     except requests.exceptions.RequestException as e:
         print(e)
-        return f"ошибка запроса к нейронке:\n{e}"
+        raise Exception(f"ошибка запроса к нейронке:\n{e}")
     except Exception as e:
         print(e)
-        return f"неожиданная ошибка:\n{e}"
+        raise Exception(f"Неожиданная ошибка:\n{e}")

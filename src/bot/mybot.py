@@ -89,7 +89,14 @@ ja, wir wollen's!''')
 
     async def more_details(self, message: Message, state : FSMContext):
         data = await state.get_data()
-        get_details(data['id'], self.ai_token)
+        try:
+            print("Здесь")
+            unformatted_json = get_details(data['id'], self.ai_token)
+            await message.answer(f"```json\n{unformatted_json}\n```")
+        except Exception as e:
+            print("Здесь #2")
+            print(e)
+            await message.answer(str(e))
     async def similar_images(self, message: Message):
         await message.answer('Похожие изображения')
 
@@ -115,6 +122,7 @@ ja, wir wollen's!''')
                 "Не удалось определить тип изображения. Возможно ваш файл поврежден. Отправьте его повторно или попробуйте другое изображение.")
             return
         files = {'image': (f'image_from_user.{photo_type}', io.BytesIO(photo_bytes), mime_type)}
-        res, id = handle_photo(files, self.ai_token)
+        data = await state.get_data()
+        res, access_token = handle_photo(files, data['lang'], self.ai_token)
         await message.reply(res)
-        await state.update_data(id=id)
+        await state.update_data(access_token=access_token)
