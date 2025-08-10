@@ -1,7 +1,8 @@
-from typing import Dict, Any
-from typing import List, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional
 
+import aiohttp
 import wikipedia
+from aiogram.types import BufferedInputFile  # Правильный импорт вместо InputFile
 from aiogram.utils.media_group import MediaGroupBuilder
 from deep_translator import GoogleTranslator
 
@@ -234,95 +235,15 @@ def format_plant_details(
         return safe_translate(error_msg) if language != 'ru' else error_msg
 
 
-async def download_image(url: str) -> bytes | None:
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                return await response.read()
-            return None
-
-
-import aiohttp
-from aiogram import Bot, types
-from aiogram.types import InputMediaPhoto, MediaGroup
-
-
-async def download_image(url: str) -> bytes:
-    """Асинхронная загрузка изображения"""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                return await response.read()
-            return None
-
-
-async def process_similar_images(message: types.Message, bot: Bot, response_json: dict):
-    """Обработка и отправка похожих изображений"""
-    try:
-        # Получаем similar_images
-        similar_images = response_json["result"]["classification"]["suggestions"][0]["similar_images"]
-
-        if not similar_images:
-            await message.answer("Похожие изображения не найдены.")
-            return
-
-        # Создаем медиа-группу
-        media_group = MediaGroup()
-
-        for i, img in enumerate(similar_images):
-            # Формируем информацию об изображении
-            similarity = f"Сходство: {img['similarity'] * 100:.1f}%"
-            license_info = ""
-
-            if "license_name" in img:
-                license_info = f"\nЛицензия: {img['license_name']}"
-                if "citation" in img:
-                    license_info += f" (Автор: {img['citation']})"
-
-            # Определяем URL для загрузки (сначала пробуем url_small)
-            image_url = img.get("url_small", img["url"])
-
-            # Загружаем изображение
-            image_data = await download_image(image_url)
-
-            if image_data:
-                # Для первого изображения добавляем подпись
-                if i == 0:
-                    caption = f"Похожие изображения растения:\n{similarity}{license_info}"
-                    media_group.attach(InputMediaPhoto(
-                        media=image_data,
-                        caption=caption
-                    ))
-                else:
-                    media_group.attach(InputMediaPhoto(media=image_data))
-            else:
-                await message.answer(f"⚠️ Не удалось загрузить изображение #{i + 1}")
-
-        # Отправляем все изображения как группу
-        if len(media_group) > 0:
-            await bot.send_media_group(
-                chat_id=message.chat.id,
-                media=media_group
-            )
-        else:
-            await message.answer("Не удалось загрузить ни одно изображение.")
-
-    except KeyError as e:
-        await message.answer(f"Ошибка обработки данных: отсутствует поле {str(e)}")
-    except Exception as e:
-        await message.answer(f"Произошла ошибка: {str(e)}")
-
-
 async def download_similar_images(
         similar_images: List[Dict[str, Any]]
 ) -> List[Tuple[bytes, Dict[str, Any]]]:
     results = []
-
     async with aiohttp.ClientSession() as session:
         for img in similar_images:
             image_url = img.get("url_small", img.get("url"))
             if not image_url:
-                print(f"URL изображения не найден в данных: {img}")
+                print(f"[WARNING] URL изображения не найден в данных: {img}")
                 continue
             image_url = image_url.strip()
             try:
@@ -337,11 +258,11 @@ async def download_similar_images(
                             "source_url": image_url
                         }
                         results.append((image_data, metadata))
-                        print(f"Успешно загружено изображение: {image_url}")
+                        print(f"[INFO] Успешно загружено изображение: {image_url}")
                     else:
-                        print(f"Ошибка загрузки изображения {image_url}: статус {response.status}")
+                        print(f"[ERROR] Ошибка загрузки изображения {image_url}: статус {response.status}")
             except Exception as e:
-                print(f"Исключение при загрузке изображения {image_url}: {str(e)}")
+                print(f"[ERROR] Исключение при загрузке изображения {image_url}: {str(e)}")
 
     return results
 
@@ -357,6 +278,7 @@ def build_similar_images_media_group(
     plant_info = f"📸 <b>Похожие изображения:</b> {plant_name}"
     if common_name:
         plant_info += f" (<i>{common_name}</i>)"
+
     for i, (image_data, metadata) in enumerate(downloaded_images):
         similarity = f"Сходство: {metadata['similarity'] * 100:.1f}%"
         license_info = ""
@@ -368,16 +290,19 @@ def build_similar_images_media_group(
                 license_info += f"\n{metadata['license_url']}"
         if i == 0:
             caption = f"{plant_info}\n\n{similarity}{license_info}"
+            # ИСПРАВЛЕНИЕ: используем BufferedInputFile вместо InputFile
             media_group.add_photo(
-                media=image_data,
+                media=BufferedInputFile(image_data, filename=f"plant_{i}.jpg"),
                 caption=caption,
                 parse_mode="HTML"
             )
         else:
             caption = f"{similarity}{license_info}"
+            # ИСПРАВЛЕНИЕ: используем BufferedInputFile вместо InputFile
             media_group.add_photo(
-                media=image_data,
+                media=BufferedInputFile(image_data, filename=f"plant_{i}.jpg"),
                 caption=caption,
                 parse_mode="HTML"
             )
+
     return media_group

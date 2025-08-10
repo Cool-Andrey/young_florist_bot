@@ -98,8 +98,8 @@ ja, wir wollen's!''')
             access_token = await self.conn.get_token(user_id)
             if access_token:
                 language = await self.conn.get_language(user_id)
-                unformatted_json = get_details(access_token, self.ai_token, language)
-                await message.answer(unformatted_json, parse_mode="HTML")
+                await message.answer(get_details(access_token, self.ai_token, language),
+                                 parse_mode="HTML")
         except Exception as e:
             print(e)
             await message.answer(str(e))
@@ -107,9 +107,11 @@ ja, wir wollen's!''')
     async def similar_images(self, message: Message):
         access_token = await self.conn.get_token(message.from_user.id)
         if access_token:
-            await message.answer(f"```json\n{get_similar_images(access_token, self.ai_token)}```",
-                                 parse_mode="MarkdownV2")
-
+            similar_images = await get_similar_images(access_token, self.ai_token)
+            await self.bot.send_media_group(
+                chat_id=message.chat.id,
+                media=similar_images.build()
+            )
     async def heat_maps_symptom_assessment(self, message: Message):
         await message.answer('тепловые карты и оценка тяжости симтомов')
 

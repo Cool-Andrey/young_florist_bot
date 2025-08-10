@@ -1,9 +1,12 @@
-import json
+from typing import Optional
 
 import requests
+from aiogram.utils.media_group import MediaGroupBuilder
 from deep_translator import GoogleTranslator
 
-from src.utils.utils import get_russian_name_from_latin, format_plant_details
+from src.utils.utils import get_russian_name_from_latin, format_plant_details, download_similar_images, \
+    build_similar_images_media_group
+
 
 def handle_photo(photo,
                  ai_token: str,
@@ -23,7 +26,8 @@ def handle_photo(photo,
                                  headers=headers, json=data, params=params)
         response.raise_for_status()
         response_json = response.json()
-        print(response_json)
+        if not response_json.get("result", {}).get("is_plant", {}).get("binary", False):
+            return "Не обнаружено растение"
         if 'result' in response_json and 'classification' in response_json['result'] and 'suggestions' in \
                 response_json['result']['classification']:
             suggestions = response_json['result']['classification']['suggestions']
@@ -84,6 +88,8 @@ def get_details(
                                 params=params)
         response.raise_for_status()
         response_json = response.json()
+        if not response_json.get("result", {}).get("is_plant", {}).get("binary", False):
+            return "Не обнаружено растение"
         return format_plant_details(response_json, language)
     except requests.exceptions.RequestException as e:
         print(e)
@@ -93,15 +99,45 @@ def get_details(
         raise Exception(f"Неожиданная ошибка:\n{e}")
 
 
-def get_similar_images(
+async def get_similar_images(
         access_token: str,
         ai_token: str
-) -> str:
+) -> Optional[MediaGroupBuilder]:
     try:
         headers = {'api-key': ai_token}
         response = requests.get(f"https://api.plant.id/v3/identification/{access_token}", headers=headers)
         response.raise_for_status()
         response_json = response.json()
+        if not response_json.get("result", {}).get("is_plant", {}).get("binary", False):
+            return "Не обнаружено растение"
+        if 'result' in response_json and 'classification' in response_json['result'] and 'suggestions' in \
+                response_json['result']['classification']:
+            suggestions = response_json['result']['classification']['suggestions']
+            plant_data = suggestions[0]
+            plant_name = plant_data["name"]
+
+            # Извлекаем общее название, если доступно
+            common_name = None
+            if "details" in plant_data and "common_names" in plant_data["details"] and plant_data["details"][
+                "common_names"]:
+                common_name = plant_data["details"]["common_names"][0]
+            similar_images = plant_data.get("similar_images", [])
+            if not similar_images:
+                raise Exception("Похожие изображения не найдены для этого растения.")
+                return None
+            downloaded_images = await download_similar_images(similar_images)
+            if not downloaded_images:
+                raise Exception("Не удалось загрузить похожие изображения, но я могу рассказать о растении.")
+            media_group = build_similar_images_media_group(
+                downloaded_images,
+                plant_name,
+                common_name
+            )
+
+            if not media_group:
+                raise Exception("Не удалось подготовить медиа-группу с похожими изображениями.")
+                return None
+            return media_group
     except requests.exceptions.RequestException as e:
         print(e)
         raise Exception(f"Ошибка запроса к нейронке:\n{e}")
