@@ -1,13 +1,9 @@
 import base64
 import io
 
-import imghdr
 from aiogram import Bot, Dispatcher, F
-
-from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, BotCommand, CallbackQuery
-from aiogram.fsm.context import FSMContext
-from pyexpat.errors import messages
+from aiogram.filters import CommandStart
+from aiogram.types import Message, CallbackQuery
 
 import src.bot.keyboards as kb
 from src.ai.request_to_plant import handle_photo, get_details
@@ -36,7 +32,7 @@ class MyBot:
 
     async def start(self, message: Message):
         await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main)
-        await self.conn.set_user(message.from_user.id)
+        await self.conn.set_user_and_language(message.from_user.id)
 
     async def help(self, message: Message):
         await message.answer(f'''📸 Как отправить фото:
@@ -85,10 +81,10 @@ ja, wir wollen's!''')
         await message.answer('Выберете язык', reply_markup=kb.translate_menu)
 
     async def translate_ru(self, callback: CallbackQuery):
-        await self.conn.set_user(callback.from_user.id, 'ru')
+        await self.conn.set_user_and_language(callback.from_user.id, 'ru')
 
     async def translate_en(self, callback: CallbackQuery):
-        await self.conn.set_user( callback.from_user.id, 'en')
+        await self.conn.set_user_and_language(callback.from_user.id, 'en')
 
     async def geolocation(self, message: Message):
         await message.answer('''СИСТЕМА ПОИСКА ПИДОРАСОВ АКТИВИРОВАНА
@@ -98,10 +94,12 @@ ja, wir wollen's!''')
 
     async def more_details(self, message: Message):
         try:
-            access_token = self.conn.get_token(message.from_user.id)
+            user_id = message.from_user.id
+            access_token = await self.conn.get_token(user_id)
             if access_token:
-                unformatted_json = get_details(access_token, self.ai_token)
-                await message.answer(f"```json\n{unformatted_json}\n```")
+                language = await self.conn.get_language(user_id)
+                unformatted_json = get_details(access_token, self.ai_token, language)
+                await message.answer(unformatted_json, parse_mode="HTML")
         except Exception as e:
             print(e)
             await message.answer(str(e))
@@ -125,15 +123,8 @@ ja, wir wollen's!''')
         buffer.seek(0)
         photo_bytes = buffer.getvalue()
         photo_base64 = base64.b64encode(photo_bytes).decode('utf-8')
-        # mime_type = "image/"
-        # photo_type = imghdr.what(None, photo_bytes)
-        # if not photo_type:
-        #     await message.reply(
-        #         "Не удалось определить тип изображения. Возможно ваш файл поврежден. Отправьте его повторно или попробуйте другое изображение.")
-        #     return
-        # files = {'image': (f'image_from_user.{photo_type}', io.BytesIO(photo_bytes), mime_type)}
         user_id = message.from_user.id
         language = await self.conn.get_language(user_id)
-        res, access_token = handle_photo(photo_base64, language, self.ai_token)
+        res, access_token = handle_photo(photo_base64, self.ai_token, language)
         await message.reply(res)
         await self.conn.set_token(access_token, user_id)
