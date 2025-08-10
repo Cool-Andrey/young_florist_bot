@@ -6,7 +6,7 @@ from aiogram.filters import CommandStart
 from aiogram.types import Message, CallbackQuery
 
 import src.bot.keyboards as kb
-from src.ai.request_to_plant import handle_photo, get_details
+from src.ai.request_to_plant import handle_photo, get_details, get_similar_images
 from src.config.config import Config
 from src.repository.sqlite.sqlite import Repository
 
@@ -105,7 +105,10 @@ ja, wir wollen's!''')
             await message.answer(str(e))
 
     async def similar_images(self, message: Message):
-        await message.answer('Похожие изображения')
+        access_token = await self.conn.get_token(message.from_user.id)
+        if access_token:
+            await message.answer(f"```json\n{get_similar_images(access_token, self.ai_token)}```",
+                                 parse_mode="MarkdownV2")
 
     async def heat_maps_symptom_assessment(self, message: Message):
         await message.answer('тепловые карты и оценка тяжости симтомов')
