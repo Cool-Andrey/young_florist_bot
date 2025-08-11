@@ -19,7 +19,9 @@ class MyBot:
         self.bot = Bot(token=config.bot_token)
         self.conn = conn
         self.dp = Dispatcher()
+
         self.dp.message.register(self.start , CommandStart())
+
         self.dp.message.register(self.menu_translate, F.text == 'язык')
         self.dp.message.register(self.help, F.text == 'помощь')
         self.dp.message.register(self.pivo, F.text == "pivo")
@@ -29,6 +31,16 @@ class MyBot:
         self.dp.message.register(self.similar_images, F.text == "похожие изображения")
         self.dp.message.register(self.health_check,
                                  F.text == "оценка тяжести симптомов")
+
+        self.dp.message.register(self.menu_translate, F.text == "language")
+        self.dp.message.register(self.help, F.text == "help")
+        self.dp.message.register(self.handle_location, F.location)
+        self.dp.message.register(self.geolocation, F.text == 'location')
+        self.dp.message.register(self.more_details, F.text == 'more details')
+        self.dp.message.register(self.similar_images, F.text == "similar images")
+        self.dp.message.register(self.health_check,
+                                 F.text == "symptom severity rating")
+
         self.dp.message.register(self.handle_photo, F.photo)
         self.dp.callback_query.register(self.translate_ru, F.data == 'ru')
         self.dp.callback_query.register(self.translate_en, F.data == 'en')
@@ -89,7 +101,11 @@ Wir wollen lieben,
 ja, wir wollen's!''')
 
     async def menu_translate(self, message: Message):
-        await message.answer('Выберете язык', reply_markup=kb.translate_menu)
+        language = await self.conn.get_language(message.from_user_id)
+        if language == 'ru':
+            await message.answer('Выберете язык', reply_markup=kb.translate_menu)
+        else:
+            await message.answer('Choose a language', reply_markup=kb.translate_menu)
 
     async def translate_ru(self, callback: CallbackQuery):
         await callback.answer('Вы выбрали язык: Русский')
@@ -104,13 +120,22 @@ ja, wir wollen's!''')
         # await callback.message.edit_reply_markup(reply_markup=None)
 
     async def geolocation(self, message: Message):
-        await message.answer('Пожалуйста, поделитесь своим местоположением:', reply_markup=main_keyboard)
+        language = await self.conn.get_language(message.from_user_id)
+        if language == 'ru':
+            await message.answer('Пожалуйста, поделитесь своим местоположением:', reply_markup=main_keyboard)
+        else:
+            await message.answer('Please share your location:', reply_markup=main_keyboard)
 
     async def handle_location(self, message: Message):
         lat = message.location.latitude
         lon = message.location.longitude
-        await message.answer(
+        language = await self.conn.get_language(message.from_user_id)
+        if language == 'ru':
+            await message.answer(
             f"Получено! Ты находишься на широте {lat}, долготе {lon}.")
+        else:
+            await message.answer(
+                f"Received! You are at latitude {lat} and longitude {lon}.")
 
     async def more_details(self, message: Message):
         try:
@@ -136,6 +161,7 @@ ja, wir wollen's!''')
             except Exception as e:
                 await message.answer(str(e))
     async def health_check(self, message: Message):
+        language = await self.conn.get_language(message.from_user_id)
         user_id = message.from_user.id
         photo_base_64 = await self.conn.get_image_base_64(user_id)
         if photo_base_64:
@@ -146,15 +172,26 @@ ja, wir wollen's!''')
                 await message.answer(res,
                                      parse_mode="HTML")
             else:
-                message.answer("Отправьте фото цветка и попробуйте снова")
+                if language == 'ru':
+                    message.answer("Отправьте фото цветка и попробуйте снова")
+                else:
+                    message.answer("Send a photo of the flower and try again")
         else:
-            await message.answer("Отправьте изображение и нажмите на кнопку повторно")
+            if language == 'ru':
+                await message.answer("Отправьте изображение и нажмите на кнопку повторно")
+            else:
+                await message.answer("Send the image and click the button again")
+
     async def run(self):
         await self.dp.start_polling(self.bot)
 
     async def handle_photo(self, message: Message):
+        language = await self.conn.get_language(message.from_user_id)
         print("Начата обработка изображения")
-        await message.reply("Обрабатываю изображение...")
+        if language == 'ru':
+            await message.reply("Обрабатываю изображение...")
+        else:
+            await message.reply("Processing the image...")
         photo_id = message.photo[-1].file_id
         file = await self.bot.get_file(photo_id)
         buffer = io.BytesIO()
