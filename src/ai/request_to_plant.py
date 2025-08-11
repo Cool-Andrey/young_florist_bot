@@ -11,24 +11,35 @@ from src.utils.utils import get_russian_name_from_latin, format_plant_details, d
 
 def handle_photo(photo_base_64: str,
                  plant_token: str,
+                 longitude: Optional[float] = None,
+                 latitude: Optional[float] = None,
                  language: str = 'ru'
-                 ) -> (str, str | None, str | None):
+                 ) -> tuple[str, Optional[str], Optional[str]]:
     try:
         data = {
             'images': [photo_base_64],
             "similar_images": True
         }
+
+        if longitude is not None and latitude is not None:
+            data["latitude"] = latitude
+            data["longitude"] = longitude
+
         params = {
             'language': language,
             'details': 'common_names,description,taxonomy,synonyms,edible_parts,propagation_methods,watering,best_watering,best_light_condition,best_soil_type,common_uses,toxicity,cultural_significance'
         }
         headers = {'api-key': plant_token}
-        response = requests.post("https://api.plant.id/v3/identification",
-                                 headers=headers, json=data, params=params)
+        response = requests.post(
+            "https://api.plant.id/v3/identification",
+            headers=headers,
+            json=data,
+            params=params
+        )
         response.raise_for_status()
         response_json = response.json()
         if not response_json.get("result", {}).get("is_plant", {}).get("binary", False):
-            return "Не обнаружено растение", None
+            return "Не обнаружено растение", None, None
 
         if 'result' in response_json and 'classification' in response_json['result'] and 'suggestions' in \
                 response_json['result']['classification']:
@@ -41,9 +52,9 @@ def handle_photo(photo_base_64: str,
                 try:
                     probability_percent = round(float(probability) * 100)
                     if probability_percent < 5:
-                        return "Не удалось определить растение.", None
+                        return "Не удалось определить растение.", None, None
                 except (ValueError, TypeError):
-                    return "Не удалось определить растение.", None
+                    return "Не удалось определить растение.", None, None
 
                 details = top_suggestion.get('details', {})
                 description = details.get('description', '')
@@ -66,28 +77,31 @@ def handle_photo(photo_base_64: str,
                         translated_desc = translator.translate(desc_str)
                         lines.append(f"\nОписание: {translated_desc}")
                     except Exception as e:
-                        desc_preview = str(description)[:30] + "..." if description and len(str(description)) > 30 else str(description)
+                        desc_preview = str(description)[:30] + "..." if description and len(
+                            str(description)) > 30 else str(description)
                         text_error = f"⚠️ Ошибка перевода '{desc_preview}': {str(e)}"
                         print(text_error)
                         lines.append("\nОписание: Не удалось перевести описание.")
 
                 response_text = "\n".join(lines)
-                return response_text, response_json['access_token'], plant_name
+                return response_text, response_json.get('access_token'), plant_name
             else:
                 return "Не удалось определить растение.", None, None
         else:
             return "Не удалось получить информацию о растении.", None, None
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(f"Ошибка запроса к Plant.id API: {e}")
         return f"Ошибка запроса к нейронке:\n{e}", None, None
     except Exception as e:
-        print(e)
+        print(f"Неожиданная ошибка в handle_photo: {e}")
         return f"Неожиданная ошибка:\n{e}", None, None
 
 
 def get_details(
         access_token: str,
         plant_token: str,
+        longitude: Optional[float] = None,
+        latitude: Optional[float] = None,
         language: str = 'ru'
 ) -> str:
     try:
@@ -96,18 +110,26 @@ def get_details(
             'language': language,
             'details': 'common_names,description,taxonomy,synonyms,edible_parts,propagation_methods,watering,best_watering,best_light_condition,best_soil_type,common_uses,toxicity,cultural_significance,taxonomy'
         }
-        response = requests.get(f"https://api.plant.id/v3/identification/{access_token}", headers=headers,
-                                params=params)
+
+        if longitude is not None and latitude is not None:
+            params["latitude"] = latitude
+            params["longitude"] = longitude
+
+        response = requests.get(
+            f"https://api.plant.id/v3/identification/{access_token}",
+            headers=headers,
+            params=params
+        )
         response.raise_for_status()
         response_json = response.json()
         if not response_json.get("result", {}).get("is_plant", {}).get("binary", False):
             return "Не обнаружено растение"
         return format_plant_details(response_json, language)
     except requests.exceptions.RequestException as e:
-        print(e)
+        print(f"Ошибка запроса к Plant.id API: {e}")
         raise Exception(f"Ошибка запроса к нейронке:\n{e}")
     except Exception as e:
-        print(e)
+        print(f"Неожиданная ошибка в get_details: {e}")
         raise Exception(f"Неожиданная ошибка:\n{e}")
 
 
@@ -159,17 +181,17 @@ async def get_similar_images(
 
 
 async def health_check(
-        photo_base_64 : str,
-        plant_token : str,
-        deepseek_token : str,
-        flower : str,
-        language : str = 'ru'
+        photo_base_64: str,
+        plant_token: str,
+        deepseek_token: str,
+        flower: str,
+        language: str = 'ru'
 ) -> str:
     try:
         data = {
-            'images' : photo_base_64
+            'images': photo_base_64
         }
-        headers = {'api-key' : plant_token}
+        headers = {'api-key': plant_token}
         response = requests.post("https://api.plant.id/v3/health_assessment", headers=headers, json=data)
         response.raise_for_status()
         response_json = response.json()

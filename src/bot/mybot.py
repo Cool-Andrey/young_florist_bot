@@ -1,27 +1,26 @@
-
 import base64
 import io
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
 from aiogram.types import Message, CallbackQuery
+from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton)
 
-import src.bot.keyboards as kb
 from src.ai.request_to_plant import handle_photo, get_details, get_similar_images, health_check
-from src.bot.keyboards import translate_menu, main_keyboard
 from src.config.config import Config
 from src.repository.sqlite.sqlite import Repository
 
 
 class MyBot:
     def __init__(self, config: Config, conn: Repository):
+        self.main_keyboard = None
         self.plant_token = config.plant_token
         self.deepseek_token = config.deepseek_token
         self.bot = Bot(token=config.bot_token)
         self.conn = conn
         self.dp = Dispatcher()
 
-        self.dp.message.register(self.start , CommandStart())
+        self.dp.message.register(self.start, CommandStart())
 
         self.dp.message.register(self.menu_translate, F.text == 'язык')
         self.dp.message.register(self.help, F.text == 'помощь')
@@ -47,7 +46,36 @@ class MyBot:
         self.dp.callback_query.register(self.translate_en, F.data == 'en')
 
     async def start(self, message: Message):
-        await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main_keyboard)
+        language = await self.conn.get_language(message.from_user.id)
+        if language == 'ru':
+            self.main_keyboard = ReplyKeyboardMarkup(
+                keyboard=[
+                    [KeyboardButton(text="местоположение", request_location=True), KeyboardButton(text="подробнее")],
+                    [KeyboardButton(text="похожие изображения"), KeyboardButton(text="оценка тяжести симптомов")],
+                    [KeyboardButton(text="помощь")],
+                    [KeyboardButton(text="язык")]
+                ],
+                resize_keyboard=True,
+                input_field_placeholder='Ваш цветок'
+            )
+        else:
+            self.main_keyboard = ReplyKeyboardMarkup(
+                keyboard=[
+                    [KeyboardButton(text="location", request_location=True), KeyboardButton(text="more details")],
+                    [KeyboardButton(text="similar images"), KeyboardButton(text="symptom severity rating")],
+                    [KeyboardButton(text="help")],
+                    [KeyboardButton(text="language")]
+                ],
+                resize_keyboard=True,
+                input_field_placeholder='Your flower'
+            )
+        self.translate_menu = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text='Русский', callback_data='ru')],
+                             [InlineKeyboardButton(text='English(original)',
+                                                   callback_data='en')]])
+        await message.answer(
+            "🌱 Отправьте фото растения – я назову его и проверю на болезни.\n🌱 Send a photo of the plant - I will name it and check it for diseases.",
+            reply_markup=self.main_keyboard)
         await self.conn.set_user_and_language(message.from_user.id)
         await self.menu_translate(message)
 
@@ -60,13 +88,20 @@ class MyBot:
     
 2)Выбери «Галерея» или «Камера»
 
-3) Загрузи фото растения – и я его проанализирую!''')
+3) Загрузи фото растения – и я его проанализирую!
+
+Если укажешь своё местоположение, результаты будут более точными!''')
         else:
             await message.answer(f'''📸 How to send a photo:
 
 1) Tap the "📎 Paperclip" (attachment icon)  
+
 2) Select "Gallery" or "Camera"  
-3) Upload a photo of the plant – and I'll analyze it!''')
+
+3) Upload a photo of the plant – and I'll analyze it!
+
+If you specify your location, the results will be more accurate!''')
+
     async def pivo(self, message: Message):
         await message.answer('''Was wollen wir trinken,
 sieben Tage lang?
@@ -102,41 +137,74 @@ Wir wollen lieben,
 ja, wir wollen's!''')
 
     async def menu_translate(self, message: Message):
-        language = await self.conn.get_language(message.from_user_id)
+        language = await self.conn.get_language(message.from_user.id)
         if language == 'ru':
-            await message.answer('Выберете язык', reply_markup=kb.translate_menu)
+            await message.answer('Выберете язык', reply_markup=self.translate_menu)
         else:
-            await message.answer('Choose a language', reply_markup=kb.translate_menu)
+            await message.answer('Choose a language', reply_markup=self.translate_menu)
 
     async def translate_ru(self, callback: CallbackQuery):
         await callback.answer('Вы выбрали язык: Русский')
         await callback.message.delete()
         await self.conn.set_user_and_language(callback.from_user.id, 'ru')
-        # await callback.message.edit_reply_markup(reply_markup=None)
+
+        # Пересоздаём клавиатуру и отправляем главное меню
+        language = 'ru'
+        main_keyboard = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="местоположение", request_location=True), KeyboardButton(text="подробнее")],
+                [KeyboardButton(text="похожие изображения"), KeyboardButton(text="оценка тяжести симптомов")],
+                [KeyboardButton(text="помощь")],
+                [KeyboardButton(text="язык")]
+            ],
+            resize_keyboard=True,
+            input_field_placeholder='Ваш цветок'
+        )
+        await callback.message.answer(
+            "Язык изменён на русский.\nТеперь отправьте фото цветка.",
+            reply_markup=main_keyboard
+        )
+
 
     async def translate_en(self, callback: CallbackQuery):
         await callback.answer('You have chosen the language: English')
         await callback.message.delete()
         await self.conn.set_user_and_language(callback.from_user.id, 'en')
-        # await callback.message.edit_reply_markup(reply_markup=None)
+
+        # Пересоздаём клавиатуру и отправляем главное меню
+        language = 'en'
+        main_keyboard = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="location", request_location=True), KeyboardButton(text="more details")],
+                [KeyboardButton(text="similar images"), KeyboardButton(text="symptom severity rating")],
+                [KeyboardButton(text="help")],
+                [KeyboardButton(text="language")]
+            ],
+            resize_keyboard=True,
+            input_field_placeholder='Your flower'
+        )
+        await callback.message.answer(
+            "Language changed to English.\nNow send a photo of the flower.",
+            reply_markup=main_keyboard
+        )
 
     async def geolocation(self, message: Message):
-        language = await self.conn.get_language(message.from_user_id)
+        language = await self.conn.get_language(message.from_user.id)
         if language == 'ru':
-            await message.answer('Пожалуйста, поделитесь своим местоположением:', reply_markup=main_keyboard)
+            await message.answer('Пожалуйста, поделитесь своим местоположением:', reply_markup=self.main_keyboard)
         else:
-            await message.answer('Please share your location:', reply_markup=main_keyboard)
+            await message.answer('Please share your location:', reply_markup=self.main_keyboard)
 
     async def handle_location(self, message: Message):
         lat = message.location.latitude
         lon = message.location.longitude
-        language = await self.conn.get_language(message.from_user_id)
+        user_id = message.from_user.id
+        language = await self.conn.get_language(user_id)
+        await self.conn.set_geoposition(user_id, lon, lat)
         if language == 'ru':
-            await message.answer(
-            f"Получено! Ты находишься на широте {lat}, долготе {lon}.")
+            await message.answer("Получено! Теперь ответы будут более точными")
         else:
-            await message.answer(
-                f"Received! You are at latitude {lat} and longitude {lon}.")
+            await message.answer("Now the answers will be more accurate")
 
     async def more_details(self, message: Message):
         try:
@@ -144,7 +212,8 @@ ja, wir wollen's!''')
             access_token = await self.conn.get_token(user_id)
             if access_token:
                 language = await self.conn.get_language(user_id)
-                await message.answer(get_details(access_token, self.plant_token, language),
+                log, lat = await self.conn.get_geoposition(user_id)
+                await message.answer(get_details(access_token, self.plant_token, log, lat, language),
                                      parse_mode="HTML")
         except Exception as e:
             print(e)
@@ -161,8 +230,9 @@ ja, wir wollen's!''')
                 )
             except Exception as e:
                 await message.answer(str(e))
+
     async def health_check(self, message: Message):
-        language = await self.conn.get_language(message.from_user_id)
+        language = await self.conn.get_language(message.from_user.id)
         user_id = message.from_user.id
         photo_base_64 = await self.conn.get_image_base_64(user_id)
         if photo_base_64:
@@ -187,7 +257,7 @@ ja, wir wollen's!''')
         await self.dp.start_polling(self.bot)
 
     async def handle_photo(self, message: Message):
-        language = await self.conn.get_language(message.from_user_id)
+        language = await self.conn.get_language(message.from_user.id)
         print("Начата обработка изображения")
         if language == 'ru':
             await message.reply("Обрабатываю изображение...")
@@ -203,7 +273,12 @@ ja, wir wollen's!''')
         user_id = message.from_user.id
         await self.conn.set_image_base64(user_id, photo_base_64)
         language = await self.conn.get_language(user_id)
-        res, access_token, flower = handle_photo(photo_base_64, self.plant_token, language)
+        position = await self.conn.get_geoposition(user_id)
+        if position:
+            lon, lat = position  # Теперь безопасно распаковываем
+        else:
+            lon, lat = None, None
+        res, access_token, flower = handle_photo(photo_base_64, self.plant_token, lon, lat, language)
         await self.conn.set_last_flower(user_id, flower)
         await message.reply(res)
         await self.conn.set_token(access_token, user_id)

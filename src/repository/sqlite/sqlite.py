@@ -1,5 +1,5 @@
 import sqlite3
-from typing import Optional
+from typing import Optional, Tuple
 
 
 class Repository:
@@ -119,6 +119,41 @@ class Repository:
             return res[0] if res and res[0] is not None else None
         except sqlite3.Error as e:
             error_msg = f"Ошибка при запросе к СУБД: не удалось получить последний цветок для пользователя {user_id}: {e}"
+            print(error_msg)
+            raise Exception(error_msg) from e
+
+    async def set_geoposition(self, user_id: int, longitude: float, latitude: float):
+        try:
+            self.cursor.execute("""
+                INSERT INTO users (id, longitude, latitude)
+                VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    longitude = excluded.longitude,
+                    latitude = excluded.latitude
+            """, (user_id, longitude, latitude))
+            self.conn.commit()
+        except sqlite3.Error as e:
+            error_msg = (
+                f"Ошибка при сохранении геопозиции: пользователь {user_id}, "
+                f"долгота={longitude}, широта={latitude}: {e}"
+            )
+            print(error_msg)
+            self.conn.rollback()
+            raise Exception(error_msg) from e
+
+    async def get_geoposition(self, user_id: int) -> Optional[Tuple[float, float]]:
+        try:
+            self.cursor.execute(
+                "SELECT longitude, latitude FROM users WHERE id = ?",
+                (user_id,)
+            )
+            result = self.cursor.fetchone()
+
+            if result and result[0] is not None and result[1] is not None:
+                return result[0], result[1]
+            return None
+        except sqlite3.Error as e:
+            error_msg = f"Ошибка при получении геопозиции для пользователя {user_id}: {e}"
             print(error_msg)
             raise Exception(error_msg) from e
 
