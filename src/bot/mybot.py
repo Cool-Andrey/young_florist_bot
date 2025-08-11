@@ -14,11 +14,12 @@ from src.repository.sqlite.sqlite import Repository
 
 class MyBot:
     def __init__(self, config: Config, conn: Repository):
-        self.ai_token = config.ai_token
+        self.plant_token = config.plant_token
+        self.deepseek_token = config.deepseek_token
         self.bot = Bot(token=config.bot_token)
         self.conn = conn
         self.dp = Dispatcher()
-        self.dp.message.register(self.start and self.help and self.menu_translate, CommandStart())
+        self.dp.message.register(self.start , CommandStart())
         self.dp.message.register(self.menu_translate, F.text == 'язык')
         self.dp.message.register(self.help, F.text == 'помощь')
         self.dp.message.register(self.pivo, F.text == "pivo")
@@ -26,7 +27,7 @@ class MyBot:
         self.dp.message.register(self.more_details, F.text == 'подробнее')
         self.dp.message.register(self.similar_images, F.text == "похожие изображения")
         self.dp.message.register(self.health_check,
-                                 F.text == "оценка тяжости симтомов")
+                                 F.text == "оценка тяжести симптомов")
         self.dp.message.register(self.handle_photo, F.photo)
         self.dp.callback_query.register(self.translate_ru, F.data == 'ru')
         self.dp.callback_query.register(self.translate_en, F.data == 'en')
@@ -34,16 +35,24 @@ class MyBot:
     async def start(self, message: Message):
         await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main_keyboard)
         await self.conn.set_user_and_language(message.from_user.id)
+        await self.menu_translate(message)
 
     async def help(self, message: Message):
-        await message.answer(f'''📸 Как отправить фото:
+        language = await self.conn.get_language(message.from_user.id)
+        if language == 'ru':
+            await message.answer(f'''📸 Как отправить фото:
 
 1) Нажми на «📎 Скрепка» (вложения)
-
+    
 2)Выбери «Галерея» или «Камера»
 
 3) Загрузи фото растения – и я его проанализирую!''')
+        else:
+            await message.answer(f'''📸 How to send a photo:
 
+1) Tap the "📎 Paperclip" (attachment icon)  
+2) Select "Gallery" or "Camera"  
+3) Upload a photo of the plant – and I'll analyze it!''')
     async def pivo(self, message: Message):
         await message.answer('''Was wollen wir trinken,
 sieben Tage lang?
@@ -85,13 +94,13 @@ ja, wir wollen's!''')
         await callback.answer('Вы выбрали язык: Русский')
         await callback.message.delete()
         await self.conn.set_user_and_language(callback.from_user.id, 'ru')
-        await callback.message.edit_reply_markup(reply_markup=None)
+        # await callback.message.edit_reply_markup(reply_markup=None)
 
     async def translate_en(self, callback: CallbackQuery):
         await callback.answer('You have chosen the language: English')
         await callback.message.delete()
         await self.conn.set_user_and_language(callback.from_user.id, 'en')
-        await callback.message.edit_reply_markup(reply_markup=None)
+        # await callback.message.edit_reply_markup(reply_markup=None)
 
     async def geolocation(self, message: Message):
         await message.answer('Пожалуйста, поделитесь своим местоположением:', reply_markup=main_keyboard)
@@ -113,8 +122,8 @@ ja, wir wollen's!''')
             access_token = await self.conn.get_token(user_id)
             if access_token:
                 language = await self.conn.get_language(user_id)
-                await message.answer(get_details(access_token, self.ai_token, language),
-                                 parse_mode="HTML")
+                await message.answer(get_details(access_token, self.plant_token, language),
+                                     parse_mode="HTML")
         except Exception as e:
             print(e)
             await message.answer(str(e))
@@ -122,18 +131,26 @@ ja, wir wollen's!''')
     async def similar_images(self, message: Message):
         access_token = await self.conn.get_token(message.from_user.id)
         if access_token:
-            similar_images = await get_similar_images(access_token, self.ai_token)
-            await self.bot.send_media_group(
-                chat_id=message.chat.id,
-                media=similar_images.build()
-            )
+            try:
+                similar_images = await get_similar_images(access_token, self.plant_token)
+                await self.bot.send_media_group(
+                    chat_id=message.chat.id,
+                    media=similar_images.build()
+                )
+            except Exception as e:
+                await message.answer(str(e))
     async def health_check(self, message: Message):
         user_id = message.from_user.id
         photo_base_64 = await self.conn.get_image_base_64(user_id)
         if photo_base_64:
             language = await self.conn.get_language(user_id)
-            await message.answer(health_check(photo_base_64, self.ai_token, language),
-                                 parse_mode="HTML")
+            last_flower = await self.conn.get_last_flower(user_id)
+            if last_flower:
+                res = await health_check(photo_base_64, self.plant_token, self.deepseek_token, last_flower, language)
+                await message.answer(res,
+                                     parse_mode="HTML")
+            else:
+                message.answer("Отправьте фото цветка и попробуйте снова")
         else:
             await message.answer("Отправьте изображение и нажмите на кнопку повторно")
     async def run(self):
@@ -152,7 +169,7 @@ ja, wir wollen's!''')
         user_id = message.from_user.id
         await self.conn.set_image_base64(user_id, photo_base_64)
         language = await self.conn.get_language(user_id)
-        res, access_token, flower = handle_photo(photo_base_64, self.ai_token, language)
+        res, access_token, flower = handle_photo(photo_base_64, self.plant_token, language)
         await self.conn.set_last_flower(user_id, flower)
         await message.reply(res)
         await self.conn.set_token(access_token, user_id)
