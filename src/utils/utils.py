@@ -306,7 +306,11 @@ def build_similar_images_media_group(
             )
     return media_group
 
-def parse_plant_health_response(json_data: Dict[str, Any], language: str = 'ru') -> str:
+def parse_plant_health_response(
+        json_data: Dict[str, Any],
+        language: str = 'ru',
+        ai_treatment_response: Optional[str] = None
+) -> str:
     try:
         result_data = json_data.get('result', {})
         is_plant = result_data.get('is_plant', {}).get('binary', False)
@@ -349,15 +353,14 @@ def parse_plant_health_response(json_data: Dict[str, Any], language: str = 'ru')
             if language != 'ru':
                 no_issues_msg = safe_translate(no_issues_msg, target_lang=language)
             result_lines.append(f"— {no_issues_msg}")
-            return "\n".join(result_lines)
+        else:
+            for i, suggestion in enumerate(suggestions[:3], 1):
+                name = suggestion.get('name', 'Неизвестная проблема')
+                probability = suggestion.get('probability', 0)
 
-        for i, suggestion in enumerate(suggestions[:3], 1):
-            name = suggestion.get('name', 'Неизвестная проблема')
-            probability = suggestion.get('probability', 0)
-
-            translated_name = safe_translate(name, target_lang=language) if language != 'ru' else name
-            problem_line = f"{i}. {translated_name.capitalize()} — <b>{probability:.2%}</b>"
-            result_lines.append(f"— {problem_line}")
+                translated_name = safe_translate(name, target_lang=language) if language != 'ru' else name
+                problem_line = f"{i}. {translated_name.capitalize()} — <b>{probability:.2%}</b>"
+                result_lines.append(f"— {problem_line}")
 
         question_data = result_data.get('disease', {}).get('question', {})
         if question_data:
@@ -390,6 +393,13 @@ def parse_plant_health_response(json_data: Dict[str, Any], language: str = 'ru')
                     result_lines.append(f"   • {yes_label}: <i>{yes_problem_trans}</i>")
                     result_lines.append(f"   • {no_label}: <i>{no_problem_trans}</i>")
 
+        if ai_treatment_response:
+            treatment_section = "#### 💊 Рекомендации по лечению"
+            if language != 'ru':
+                treatment_section = safe_translate(treatment_section, target_lang=language)
+            result_lines.append(f"\n<b>{treatment_section}</b>")
+            result_lines.append(ai_treatment_response.strip())
+
         license_note = "ℹ️ Примечание: Изображения для сравнения лицензированы под CC BY-NC-SA 4.0 (разрешено некоммерческое использование с указанием авторства и обязательным распространением производных работ на тех же условиях)."
         if language != 'ru':
             license_note = safe_translate(license_note, target_lang=language)
@@ -399,4 +409,5 @@ def parse_plant_health_response(json_data: Dict[str, Any], language: str = 'ru')
 
     except Exception as e:
         error_msg = f"❌ Критическая ошибка форматирования данных: {str(e)}"
-        return safe_translate(error_msg, target_lang=language) if language != 'ru' else error_msg
+        print(error_msg)
+        raise Exception(safe_translate(error_msg, target_lang=language) if language != 'ru' else error_msg) from e

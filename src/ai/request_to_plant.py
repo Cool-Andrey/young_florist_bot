@@ -4,12 +4,13 @@ import requests
 from aiogram.utils.media_group import MediaGroupBuilder
 from deep_translator import GoogleTranslator
 
+from src.ai.request_to_deepseek import ask_deepseek_about_flower_diseases
 from src.utils.utils import get_russian_name_from_latin, format_plant_details, download_similar_images, \
     build_similar_images_media_group, parse_plant_health_response
 
 
 def handle_photo(photo_base_64: str,
-                 ai_token: str,
+                 plant_token: str,
                  language: str = 'ru'
                  ) -> (str, str | None, str | None):
     try:
@@ -21,7 +22,7 @@ def handle_photo(photo_base_64: str,
             'language': language,
             'details': 'common_names,description,taxonomy,synonyms,edible_parts,propagation_methods,watering,best_watering,best_light_condition,best_soil_type,common_uses,toxicity,cultural_significance'
         }
-        headers = {'api-key': ai_token}
+        headers = {'api-key': plant_token}
         response = requests.post("https://api.plant.id/v3/identification",
                                  headers=headers, json=data, params=params)
         response.raise_for_status()
@@ -60,7 +61,7 @@ def handle_photo(photo_base_64: str,
 
                 if description:
                     try:
-                        desc_str = str(description) if description is not None else ""
+                        desc_str = str(description['value']) if description is not None else ""
                         translator = GoogleTranslator(source_lang='auto', target=language)
                         translated_desc = translator.translate(desc_str)
                         lines.append(f"\nОписание: {translated_desc}")
@@ -86,11 +87,11 @@ def handle_photo(photo_base_64: str,
 
 def get_details(
         access_token: str,
-        ai_token: str,
+        plant_token: str,
         language: str = 'ru'
 ) -> str:
     try:
-        headers = {'api-key': ai_token}
+        headers = {'api-key': plant_token}
         params = {
             'language': language,
             'details': 'common_names,description,taxonomy,synonyms,edible_parts,propagation_methods,watering,best_watering,best_light_condition,best_soil_type,common_uses,toxicity,cultural_significance,taxonomy'
@@ -112,10 +113,10 @@ def get_details(
 
 async def get_similar_images(
         access_token: str,
-        ai_token: str
+        plant_token: str
 ) -> Optional[MediaGroupBuilder]:
     try:
-        headers = {'api-key': ai_token}
+        headers = {'api-key': plant_token}
         response = requests.get(f"https://api.plant.id/v3/identification/{access_token}", headers=headers)
         response.raise_for_status()
         response_json = response.json()
@@ -138,6 +139,7 @@ async def get_similar_images(
             downloaded_images = await download_similar_images(similar_images)
             if not downloaded_images:
                 raise Exception("Не удалось загрузить похожие изображения, но я могу рассказать о растении.")
+                return None
             media_group = build_similar_images_media_group(
                 downloaded_images,
                 plant_name,
@@ -156,19 +158,28 @@ async def get_similar_images(
         raise Exception(f"Неожиданная ошибка:\n{e}")
 
 
-def health_check(
+async def health_check(
         photo_base_64 : str,
-        ai_token : str,
+        plant_token : str,
+        deepseek_token : str,
+        flower : str,
         language : str = 'ru'
 ) -> str:
     try:
         data = {
             'images' : photo_base_64
         }
-        headers = {'api-key' : ai_token}
+        headers = {'api-key' : plant_token}
         response = requests.post("https://api.plant.id/v3/health_assessment", headers=headers, json=data)
         response.raise_for_status()
-        return parse_plant_health_response(response.json(), language)
+        response_json = response.json()
+        suggestions = response_json["result"]["disease"]["suggestions"]
+
+        top_3 = sorted(suggestions, key=lambda x: x["probability"], reverse=True)[:3]
+
+        top_3_names = [item["name"] for item in top_3]
+        res = await ask_deepseek_about_flower_diseases(deepseek_token, top_3_names, flower, language)
+        return parse_plant_health_response(response_json, language, res)
     except requests.exceptions.RequestException as e:
         print(e)
         raise Exception(f"Ошибка запроса к нейронке:\n{e}")
