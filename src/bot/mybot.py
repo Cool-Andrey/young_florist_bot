@@ -7,6 +7,7 @@ from aiogram.types import Message, CallbackQuery
 
 import src.bot.keyboards as kb
 from src.ai.request_to_plant import handle_photo, get_details, get_similar_images
+from src.bot.keyboards import translate_menu
 from src.config.config import Config
 from src.repository.sqlite.sqlite import Repository
 
@@ -81,10 +82,23 @@ ja, wir wollen's!''')
         await message.answer('Выберете язык', reply_markup=kb.translate_menu)
 
     async def translate_ru(self, callback: CallbackQuery):
+        await callback.answer('Вы выбрали язык: Русский')
+        await callback.message.delete()
         await self.conn.set_user_and_language(callback.from_user.id, 'ru')
+        await callback.message.edit_reply_markup(reply_markup=None)
+
+
+
+
 
     async def translate_en(self, callback: CallbackQuery):
+        await callback.answer('You have chosen the language: English')
+        await callback.message.delete()
         await self.conn.set_user_and_language(callback.from_user.id, 'en')
+        await callback.message.edit_reply_markup(reply_markup=None)
+
+
+
 
     async def geolocation(self, message: Message):
         await message.answer('''СИСТЕМА ПОИСКА ПИДОРАСОВ АКТИВИРОВАНА

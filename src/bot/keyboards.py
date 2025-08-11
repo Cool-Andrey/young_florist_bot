@@ -8,6 +8,5 @@ main = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="местополож�
                            resize_keyboard=True,
                            input_field_placeholder='Ваш цветок')
 
-translate_menu = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='Русский', callback_data='ru')],
-    [InlineKeyboardButton(text='English(original)', callback_data='en')]])
+translate_menu = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text='Русский', callback_data='ru')],
+                                                       [InlineKeyboardButton(text='English(original)', callback_data='en')]])
