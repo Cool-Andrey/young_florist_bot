@@ -4,7 +4,7 @@ import requests
 from aiogram.utils.media_group import MediaGroupBuilder
 from deep_translator import GoogleTranslator
 
-from src.ai.request_to_deepseek import ask_deepseek_about_flower_diseases
+from src.ai.request_to_openrouter import ask_openrouter_about_flower_diseases
 from src.utils.utils import get_russian_name_from_latin, format_plant_details, download_similar_images, \
     build_similar_images_media_group, parse_plant_health_response
 
@@ -178,7 +178,7 @@ async def health_check(
         top_3 = sorted(suggestions, key=lambda x: x["probability"], reverse=True)[:3]
 
         top_3_names = [item["name"] for item in top_3]
-        res = await ask_deepseek_about_flower_diseases(deepseek_token, top_3_names, flower, language)
+        res = await ask_openrouter_about_flower_diseases(deepseek_token, top_3_names, flower, language)
         return parse_plant_health_response(response_json, language, res)
     except requests.exceptions.RequestException as e:
         print(e)
