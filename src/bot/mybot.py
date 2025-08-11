@@ -7,7 +7,7 @@ from aiogram.types import Message, CallbackQuery
 
 import src.bot.keyboards as kb
 from src.ai.request_to_plant import handle_photo, get_details, get_similar_images
-from src.bot.keyboards import translate_menu
+from src.bot.keyboards import translate_menu, main_keyboard
 from src.config.config import Config
 from src.repository.sqlite.sqlite import Repository
 
@@ -32,7 +32,7 @@ class MyBot:
         self.dp.callback_query.register(self.translate_en, F.data == 'en')
 
     async def start(self, message: Message):
-        await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main)
+        await message.answer("🌱 Отправьте фото растения – я назову его и проверю на болезни.", reply_markup=kb.main_keyboard)
         await self.conn.set_user_and_language(message.from_user.id)
 
     async def help(self, message: Message):
@@ -87,24 +87,25 @@ ja, wir wollen's!''')
         await self.conn.set_user_and_language(callback.from_user.id, 'ru')
         await callback.message.edit_reply_markup(reply_markup=None)
 
-
-
-
-
     async def translate_en(self, callback: CallbackQuery):
         await callback.answer('You have chosen the language: English')
         await callback.message.delete()
         await self.conn.set_user_and_language(callback.from_user.id, 'en')
         await callback.message.edit_reply_markup(reply_markup=None)
 
-
-
-
     async def geolocation(self, message: Message):
-        await message.answer('''СИСТЕМА ПОИСКА ПИДОРАСОВ АКТИВИРОВАНА
-        ПИ
-        ПИ-ПИ-ПИ-ПИ
-        ПИДОРАС НАЙДЕН''')
+        await message.answer('Пожалуйста, поделитесь своим местоположением:', reply_markup=main_keyboard)
+
+    async def handle_location(self, message: Message):
+        lat = message.location.latitude
+        lon = message.location.longitude
+        print(lon, lat)
+        await message.answer(
+            f"Ваше местоположение: {lat}, {lon}\n"
+            f"🔗 [Открыть в Google Maps](https://maps.google.com/?q={lat},{lon})",
+            lon, lat,
+            parse_mode="Markdown")
+
 
     async def more_details(self, message: Message):
         try:

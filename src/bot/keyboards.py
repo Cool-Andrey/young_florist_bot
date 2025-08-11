@@ -1,7 +1,7 @@
 from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardMarkup, InlineKeyboardButton)
 
-main = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="местоположение"), KeyboardButton(text="подробнее")],
+main_keyboard = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="местоположение", request_location=True), KeyboardButton(text="подробнее")],
                                      [KeyboardButton(text="похожие изображения"), KeyboardButton(text="тепловые карты и оценка тяжости симтомов")],
                                      [KeyboardButton(text="помощь")],
                                      [KeyboardButton(text="язык")]],
