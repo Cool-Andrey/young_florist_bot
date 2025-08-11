@@ -22,6 +22,7 @@ class MyBot:
         self.dp.message.register(self.menu_translate, F.text == 'язык')
         self.dp.message.register(self.help, F.text == 'помощь')
         self.dp.message.register(self.gitler, F.text == "pivo")
+        self.dp.message.register(self.handle_location, F.location)
         self.dp.message.register(self.geolocation, F.text == 'местоположение')
         self.dp.message.register(self.more_details, F.text == 'подробнее')
         self.dp.message.register(self.similar_images, F.text == "похожие изображения")
@@ -99,13 +100,8 @@ ja, wir wollen's!''')
     async def handle_location(self, message: Message):
         lat = message.location.latitude
         lon = message.location.longitude
-        print(lon, lat)
         await message.answer(
-            f"Ваше местоположение: {lat}, {lon}\n"
-            f"🔗 [Открыть в Google Maps](https://maps.google.com/?q={lat},{lon})",
-            lon, lat,
-            parse_mode="Markdown")
-
+            f"Получено! Ты находишься на широте {lat}, долготе {lon}.")
 
     async def more_details(self, message: Message):
         try:
