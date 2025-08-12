@@ -1,8 +1,8 @@
-from typing import List, Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, Union, List
 
 import aiohttp
 import wikipedia
-from aiogram.types import BufferedInputFile  # Правильный импорт вместо InputFile
+from aiogram.types import BufferedInputFile
 from aiogram.utils.media_group import MediaGroupBuilder
 from deep_translator import GoogleTranslator
 
@@ -20,23 +20,51 @@ def get_russian_name_from_latin(latin_name: str, lang: str) -> str:
 
 translation_cache = {}
 
-def safe_translate(text: str, source_lang: str = 'auto', target_lang: str = 'ru') -> str:
-    if not text or not text.strip():
+
+def safe_translate(text: Union[str, List[str]], source_lang: str = 'auto', target_lang: str = 'ru') -> Union[
+    str, List[str]]:
+    if not text:
+        return text
+    if isinstance(text, str):
+        if not text.strip():
+            return text
+
+        cache_key = (text.strip(), source_lang, target_lang)
+        if cache_key in translation_cache:
+            return translation_cache[cache_key]
+
+        try:
+            translator = GoogleTranslator(source=source_lang, target=target_lang)
+            translated = translator.translate(text.strip())
+            translation_cache[cache_key] = translated
+            return translated
+        except Exception as e:
+            print(f"⚠️ Ошибка перевода '{text[:30]}...': {str(e)}")
+            return text
+
+    elif isinstance(text, list):
+        translated_list = []
+        for item in text:
+            if isinstance(item, str):
+                translated_item = safe_translate(item, source_lang, target_lang)
+                translated_list.append(translated_item)
+            else:
+                print(f"⚠️ Пропущен элемент (не строка): {item}")
+                translated_list.append(item)
+        return translated_list
+
+    else:
+        print(f"⚠️ Неподдерживаемый тип: {type(text)}")
         return text
 
-    cache_key = (text.strip(), source_lang, target_lang)
-    if cache_key in translation_cache:
-        return translation_cache[cache_key]
-
-    try:
-        translator = GoogleTranslator(source=source_lang, target=target_lang)
-        translated = translator.translate(text.strip())
-        translation_cache[cache_key] = translated
-        return translated
-    except Exception as e:
-        print(f"⚠️ Ошибка перевода '{text[:30]}...': {str(e)}")
-        return text
-
+def list_to_string(value: Any) -> str:
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    elif isinstance(value, str):
+        return value.strip()
+    elif value is not None:
+        return str(value)
+    return ""
 
 def format_plant_details(
         json_data: Dict[str, Any],
@@ -58,10 +86,11 @@ def format_plant_details(
         elif not isinstance(common_names, list):
             common_names = []
 
-        # Перевод common_names
         if language != 'ru':
-            plant_names_list = [safe_translate(name, target_lang=language) for name in common_names] if common_names else []
-            plant_names = " / ".join(plant_names_list) if plant_names_list else safe_translate("Информация о растении", target_lang=language)
+            plant_names_list = [safe_translate(name, target_lang=language) for name in
+                                common_names] if common_names else []
+            plant_names = " / ".join(plant_names_list) if plant_names_list else safe_translate("Информация о растении",
+                                                                                               target_lang=language)
             section_title_main = safe_translate("### 🌸 {name}", target_lang=language).replace("{name}", plant_names)
             section_title_latin = safe_translate("Латинское название", target_lang=language)
         else:
@@ -71,7 +100,6 @@ def format_plant_details(
 
         result = [f"<b>{section_title_main}</b>", f"<b>{section_title_latin}</b>: <i>{latin_name}</i>\n"]
 
-        # Таксономия
         if taxonomy := details.get('taxonomy', {}):
             if isinstance(taxonomy, dict):
                 tax_title = "#### 🌿 Таксономия"
@@ -200,8 +228,7 @@ def format_plant_details(
         edible = details.get('edible_parts')
         edible_label = "Съедобные части"
         if edible:
-            if language != 'ru':
-                edible = safe_translate(edible, target_lang=language)
+            edible = safe_translate(edible, target_lang=language)
             edible_label = safe_translate(edible_label, target_lang=language)
             extra_info.append(f"<b>{edible_label}</b>: {edible}")
         else:
@@ -246,10 +273,19 @@ async def download_similar_images(
     results = []
     async with aiohttp.ClientSession() as session:
         for img in similar_images:
-            image_url = img.get("url_small", img.get("url"))
+            image_url = img.get("url_small") or img.get("url")
             if not image_url:
                 print(f"[WARNING] URL изображения не найден в данных: {img}")
                 continue
+            if isinstance(image_url, list):
+                print(f"[WARNING] URL изображения — список, используем первый элемент: {image_url}")
+                image_url = image_url[0] if len(image_url) > 0 else None
+            elif not isinstance(image_url, str):
+                print(f"[WARNING] Некорректный тип URL изображения (не строка): {type(image_url)}")
+                continue
+            if not image_url:
+                continue
+            print(image_url)
             image_url = image_url.strip()
             try:
                 async with session.get(image_url) as response:
@@ -268,6 +304,8 @@ async def download_similar_images(
                         print(f"[ERROR] Ошибка загрузки изображения {image_url}: статус {response.status}")
             except Exception as e:
                 print(f"[ERROR] Исключение при загрузке изображения {image_url}: {str(e)}")
+
+    return results  # ← не забудь вернуть результат!
 
 
 def build_similar_images_media_group(
@@ -306,6 +344,7 @@ def build_similar_images_media_group(
             )
     return media_group
 
+
 def parse_plant_health_response(
         json_data: Dict[str, Any],
         language: str = 'ru',
@@ -317,7 +356,7 @@ def parse_plant_health_response(
         plant_probability = result_data.get('is_plant', {}).get('probability', 0)
 
         if not is_plant:
-            msg = f"Анализ показывает, что предоставленное изображение, скорее всего, НЕ содержит растение (вероятность: {1-plant_probability:.2%})."
+            msg = f"Анализ показывает, что предоставленное изображение, скорее всего, НЕ содержит растение (вероятность: {1 - plant_probability:.2%})."
             return safe_translate(msg, target_lang=language) if language != 'ru' else msg
 
         is_healthy = result_data.get('is_healthy', {}).get('binary', True)
@@ -371,7 +410,8 @@ def parse_plant_health_response(
                     diag_section = safe_translate(diag_section, target_lang=language)
                 result_lines.append(f"\n<b>{diag_section}</b>")
 
-                translated_question = safe_translate(question_text, target_lang=language) if language != 'ru' else question_text
+                translated_question = safe_translate(question_text,
+                                                     target_lang=language) if language != 'ru' else question_text
                 result_lines.append(f"— {translated_question}")
 
                 options = question_data.get('options', {})
@@ -384,8 +424,10 @@ def parse_plant_health_response(
                     yes_problem = suggestions[yes_index]['name'] if yes_index < len(suggestions) else "проблема"
                     no_problem = suggestions[no_index]['name'] if no_index < len(suggestions) else "проблема"
 
-                    yes_problem_trans = safe_translate(yes_problem, target_lang=language) if language != 'ru' else yes_problem
-                    no_problem_trans = safe_translate(no_problem, target_lang=language) if language != 'ru' else no_problem
+                    yes_problem_trans = safe_translate(yes_problem,
+                                                       target_lang=language) if language != 'ru' else yes_problem
+                    no_problem_trans = safe_translate(no_problem,
+                                                      target_lang=language) if language != 'ru' else no_problem
 
                     yes_label = "Да" if language == 'ru' else safe_translate("Yes", target_lang=language)
                     no_label = "Нет" if language == 'ru' else safe_translate("No", target_lang=language)
@@ -411,3 +453,18 @@ def parse_plant_health_response(
         error_msg = f"❌ Критическая ошибка форматирования данных: {str(e)}"
         print(error_msg)
         raise Exception(safe_translate(error_msg, target_lang=language) if language != 'ru' else error_msg) from e
+
+
+def split_text(text: str, max_length: int = 4096) -> list[str]:
+    if len(text) <= max_length:
+        return [text]
+
+    parts = []
+    while len(text) > max_length:
+        split_index = text.rfind(' ', 0, max_length)
+        if split_index == -1:
+            split_index = max_length
+        parts.append(text[:split_index])
+        text = text[split_index:].lstrip()
+    parts.append(text)
+    return parts

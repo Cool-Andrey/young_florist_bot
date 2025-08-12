@@ -8,6 +8,7 @@ from aiogram.types import (ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMa
 
 from src.ai.request_to_plant import handle_photo, get_details, get_similar_images, health_check
 from src.config.config import Config
+from src.utils.utils import split_text
 from src.repository.sqlite.sqlite import Repository
 
 
@@ -69,10 +70,6 @@ class MyBot:
                 resize_keyboard=True,
                 input_field_placeholder='Your flower'
             )
-        self.translate_menu = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='Русский', callback_data='ru')],
-                             [InlineKeyboardButton(text='English(original)',
-                                                   callback_data='en')]])
         await message.answer(
             "🌱 Отправьте фото растения – я назову его и проверю на болезни.\n🌱 Send a photo of the plant - I will name it and check it for diseases.",
             reply_markup=self.main_keyboard)
@@ -135,20 +132,25 @@ Wir wollen lieben,
 sieben Tage lang!
 Wir wollen lieben,
 ja, wir wollen's!''')
-
+    def get_translate_menu(self) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text='Русский', callback_data='ru')],
+                [InlineKeyboardButton(text='English (original)', callback_data='en')]
+            ]
+        )
     async def menu_translate(self, message: Message):
         language = await self.conn.get_language(message.from_user.id)
         if language == 'ru':
-            await message.answer('Выберете язык', reply_markup=self.translate_menu)
+            await message.answer('Выберете язык', reply_markup=self.get_translate_menu())
         else:
-            await message.answer('Choose a language', reply_markup=self.translate_menu)
+            await message.answer('Choose a language', reply_markup=self.get_translate_menu())
 
     async def translate_ru(self, callback: CallbackQuery):
         await callback.answer('Вы выбрали язык: Русский')
         await callback.message.delete()
         await self.conn.set_user_and_language(callback.from_user.id, 'ru')
 
-        # Пересоздаём клавиатуру и отправляем главное меню
         language = 'ru'
         main_keyboard = ReplyKeyboardMarkup(
             keyboard=[
@@ -170,9 +172,6 @@ ja, wir wollen's!''')
         await callback.answer('You have chosen the language: English')
         await callback.message.delete()
         await self.conn.set_user_and_language(callback.from_user.id, 'en')
-
-        # Пересоздаём клавиатуру и отправляем главное меню
-        language = 'en'
         main_keyboard = ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text="location", request_location=True), KeyboardButton(text="more details")],
@@ -213,8 +212,17 @@ ja, wir wollen's!''')
             if access_token:
                 language = await self.conn.get_language(user_id)
                 log, lat = await self.conn.get_geoposition(user_id)
-                await message.answer(get_details(access_token, self.plant_token, log, lat, language),
-                                     parse_mode="HTML")
+                if language == 'ru':
+                    await message.answer("Обрабатываю запрос...")
+                else:
+                    await message.answer("Processing request...")
+                res = get_details(access_token, self.plant_token, log, lat, language)
+                parts = split_text(res)
+                print(res)
+                print(parts)
+                for part in parts:
+                    if part.strip():
+                        await message.answer(part, parse_mode="HTML")
         except Exception as e:
             print(e)
             await message.answer(str(e))
@@ -275,7 +283,7 @@ ja, wir wollen's!''')
         language = await self.conn.get_language(user_id)
         position = await self.conn.get_geoposition(user_id)
         if position:
-            lon, lat = position  # Теперь безопасно распаковываем
+            lon, lat = position
         else:
             lon, lat = None, None
         res, access_token, flower = handle_photo(photo_base_64, self.plant_token, lon, lat, language)
