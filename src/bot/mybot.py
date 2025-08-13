@@ -213,7 +213,7 @@ If you specify your location, the results will be more accurate!''')
                     if language == 'ru':
                         await message.answer("Отправьте изображение и нажмите на кнопку повторно")
                     else:
-                        await message.answer("Send the image and click on the button again")
+                        await message.answer("Send the image and click on the button again") 
             except Exception as e:
                 await message.answer(str(e))
         else:
